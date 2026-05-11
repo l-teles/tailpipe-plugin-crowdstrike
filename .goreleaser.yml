@@ -1,0 +1,57 @@
+# Goreleaser configuration for tailpipe-plugin-crowdstrike.
+#
+# Shape mirrors turbot/tailpipe-plugin-aws (gz archives, one binary per target,
+# binary name ends in `.plugin`). The Turbot-internal OCI publish step is
+# intentionally omitted; releases attach binaries to the GitHub Release and
+# users install via `make install` from source or by manually downloading and
+# extracting the .gz under ~/.tailpipe/plugins/hub.tailpipe.io/plugins/l-teles/crowdstrike@latest/.
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: tailpipe-plugin-crowdstrike
+    binary: "{{ .ProjectName }}.plugin"
+    main: ./
+    flags:
+      - -tags=netgo  # pure-Go DNS resolver; lets us skip CGO + cross-compilers entirely
+      - -trimpath    # strip absolute paths from the binary for reproducibility
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: default
+    formats: [gz]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    # Tailpipe install paths expect the binary inside a flat .gz, not a tar.
+    files:
+      - none*
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  # Release notes come from Release Drafter (.github/release-drafter.yml).
+  disable: true
+
+release:
+  draft: true # require a human to flip the release public — defence-in-depth
+  prerelease: auto
+  mode: replace

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔐 Report a security vulnerability
+    url: https://github.com/l-teles/tailpipe-plugin-crowdstrike/security/advisories/new
+    about: Use GitHub's private vulnerability reporting. Do not open a public issue for security-impacting findings.
+  - name: 💬 Tailpipe core help
+    url: https://github.com/turbot/tailpipe/issues
+    about: Issues with the Tailpipe CLI itself (not this plugin) belong upstream.
+  - name: 📖 CrowdStrike FDR documentation
+    url: https://falcon.crowdstrike.com/documentation/page/cb135ad9/falcon-data-replicator
+    about: For FDR product or feed configuration questions, see CrowdStrike's docs.

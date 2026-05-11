@@ -1,0 +1,64 @@
+version: 2
+
+# 7-day cooldown across all ecosystems so version bumps land in batches rather
+# than as a daily stream. Adjust if a high-severity advisory needs faster
+# turnaround.
+
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    groups:
+      aws-sdk:
+        patterns:
+          - "github.com/aws/aws-sdk-go-v2*"
+      tailpipe-sdk:
+        patterns:
+          - "github.com/turbot/tailpipe-plugin-sdk"
+          - "github.com/turbot/pipe-fittings/*"
+          - "github.com/turbot/go-kit"
+      otel:
+        patterns:
+          - "go.opentelemetry.io/*"
+      gcp:
+        patterns:
+          - "cloud.google.com/*"
+          - "google.golang.org/*"
+      everything-else:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "github.com/aws/aws-sdk-go-v2*"
+          - "github.com/turbot/*"
+          - "go.opentelemetry.io/*"
+          - "cloud.google.com/*"
+          - "google.golang.org/*"
+    cooldown:
+      default-days: 7
+
+  # Security-tooling deps (gosec, govulncheck) live in their own go.mod so
+  # they don't perturb the main module graph. Get the same cooldown + label
+  # treatment as the main deps.
+  - package-ecosystem: "gomod"
+    directory: "/.github/security-tools"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(sec)"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    cooldown:
+      default-days: 7

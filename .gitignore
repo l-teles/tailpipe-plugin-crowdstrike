@@ -31,3 +31,10 @@ testdata-private/
 
 # Claude
 .claude/
+
+# Ruleset JSONs — these describe required-status-check / bypass-actor /
+# protected-branch internals and must never land in a public repo. The
+# actual files live in the maintainer's private store and are applied via
+# `gh api --input <private-path>`. Belt-and-braces in case a future PR
+# tries to re-introduce them.
+.github/rulesets/

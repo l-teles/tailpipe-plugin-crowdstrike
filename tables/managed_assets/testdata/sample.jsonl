@@ -1,0 +1,2 @@
+{"GatewayIP":"203.0.113.1","GatewayMAC":"00-11-22-33-44-55","InterfaceAlias":"en0","InterfaceDescription":"","LocalAddressIP4":"203.0.113.10","MAC":"AA-BB-CC-DD-EE-FF","MACPrefix":"AA-BB-CC","_time":"1700000000.000","aid":"00000000000000000000000000000001","cid":"00000000000000000000000000000001"}
+{"GatewayIP":"","GatewayMAC":"","InterfaceAlias":"en12","InterfaceDescription":"","LocalAddressIP4":"203.0.113.11","MAC":"AA-BB-CC-DD-EE-FE","MACPrefix":"AA-BB-CC","_time":"1700000100.000","aid":"00000000000000000000000000000002","cid":"00000000000000000000000000000001"}
