@@ -1,0 +1,33 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.plugin
+
+# Editor cache and lock files
+*.swp
+*.swo
+.DS_Store
+
+# IDE
+.idea/
+.run
+.vscode/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Goreleaser
+dist/
+
+# Local fixtures and scratch files
+testdata-private/
+.local/
+
+# Claude
+.claude/
