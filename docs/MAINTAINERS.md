@@ -23,65 +23,71 @@ repo's actual state.
 
 - Default branch: **`main`**
 - Issues: **enabled**
-- Discussions: **disabled** (re-enable if user demand emerges)
-- Projects: **disabled**
-- Wikis: **disabled**
-- Sponsorships: **disabled**
+- Discussions / Projects / Wikis / Sponsorships: **disabled**
 - Preserve this repository: **disabled** (until archived)
-- Template repository: **disabled**
-- **Pull Requests**:
-  - ☑ Allow squash merging (default commit title: PR title)
-  - ☐ Allow merge commits
-  - ☐ Allow rebase merging
-  - ☑ Always suggest updating pull request branches
-  - ☑ Allow auto-merge **only after** rulesets in §4 are active
-  - ☑ Automatically delete head branches
-- **Pushes**:
-  - ☑ Require contributors to sign off on web-based commits (`web_commit_signoff_required: true`)
+- **Pull requests**: squash only; delete branch on merge; auto-merge off; suggest updating PR branches.
+- **Pushes**: ☑ Require contributors to sign off on web-based commits.
 
 ## 3. Security settings (Settings → Code security)
 
-- ☑ **Private vulnerability reporting**
-- ☑ **Dependency graph**
-- ☑ **Dependabot alerts**
-- ☑ **Dependabot security updates**
-- ☑ **Dependabot version updates** (config in `.github/dependabot.yml`)
-- ☑ **Secret scanning**
-- ☑ **Push protection** (block commits containing secrets)
-- ☑ **Code scanning** with **CodeQL** (default setup or via `.github/workflows/codeql.yml` — we ship the latter)
+All free on a public repo:
 
-## 4. Branch / tag rulesets (Settings → Rules → Rulesets → New ruleset → Import)
+- ☑ Private vulnerability reporting
+- ☑ Dependency graph
+- ☑ Dependabot alerts + security updates + version updates (config in `.github/dependabot.yml`)
+- ☑ Secret scanning + push protection
+- ☑ Code scanning with CodeQL (we ship `.github/workflows/codeql.yml`)
 
-Two ruleset JSONs ship in the repo:
+## 4. Branch / tag rulesets
+
+> **Important — security note.** Rulesets describe *exactly which CI checks
+> must pass to merge*, which bypass actors are allowed, and which branch
+> patterns are protected. Publishing the JSON in a public repo gives an
+> attacker a roadmap. **Keep the actual ruleset JSON outside this repo.**
+
+Rulesets live in the maintainer's private store (e.g.
+`~/.local/share/repo-private-config/<repo>/`). They are imported via:
 
 ```bash
-gh api -X POST "repos/l-teles/tailpipe-plugin-crowdstrike/rulesets" \
-  --input .github/rulesets/main-branch.json
-
-gh api -X POST "repos/l-teles/tailpipe-plugin-crowdstrike/rulesets" \
-  --input .github/rulesets/tag-protection.json
+gh api -X POST "repos/<OWNER>/<REPO>/rulesets" --input <private-path>/main-branch.ruleset.json
+gh api -X POST "repos/<OWNER>/<REPO>/rulesets" --input <private-path>/tag-protection.ruleset.json
 ```
 
-After import, verify each shows **Status: Active** in the UI. Required status-check contexts must match the workflow `name:` values exactly — keep `main-branch.json` in sync if a workflow is renamed.
+### Policy goal (describe-not-disclose)
+
+The policy enforces, on `main`:
+- No direct pushes (PR required, 1 approving review, code-owner review, last-push approval, stale-review dismissal, conversation-resolution).
+- Linear history, no force-push, no deletion.
+- All required-status-check contexts must succeed before merge (the specific list lives in the private ruleset JSON so attackers can't trivially target which workflows to subvert).
+- Squash-only merge method.
+
+On `v*` tags:
+- No deletion, force-push, or update once published.
+
+Required-status-check contexts must match the workflow `name:` values exactly. Re-export the ruleset JSON when a workflow is renamed.
 
 ## 5. Actions settings (Settings → Actions → General)
 
-- **Actions permissions**: Allow `l-teles` actions and reusable workflows; for third-party: ☑ Allow actions created by GitHub + ☑ Allow specified actions and reusable workflows (paste the SHAs from our workflows if you want to be strict).
-- **Require SHA pinning** for actions and reusable workflows: ☑ (the API equivalent is `sha_pinning_required: true`).
-- **Workflow permissions**: ☑ **Read repository contents and packages permissions** (default `GITHUB_TOKEN` is read-only; each workflow elevates per job).
-- **Allow GitHub Actions to create and approve pull requests**: ☐ (off — defence in depth)
-- **Fork PR workflows from outside collaborators**: ☑ Require approval for first-time contributors.
+- **Actions permissions**: All actions and reusable workflows allowed; **require SHA pinning** for actions and reusable workflows (✅ on free plan).
+- **Workflow permissions**: default `GITHUB_TOKEN` = read-only (workflows elevate per job).
+- ☐ Allow GitHub Actions to create and approve pull requests.
+- ☑ Require approval for first-time contributors' PR workflows from forks.
 
-## 6. Environment-gated secrets (if/when we add integration tests against real FDR)
+## 6. Environment-gated secrets (if/when we add integration tests against a real FDR bucket)
 
-If we ever add CI that touches a real S3 bucket / AWS account:
-
-- Create an **Environment** named `e2e-prod` (Settings → Environments).
-- Add deployment branch rule: only `main`.
-- Add required reviewers (at least one).
-- Store the AWS credentials there, not in repo-wide secrets.
+Create an Environment (e.g. `e2e-prod`) with:
+- Deployment branch rule: only `main`.
+- Required reviewers: at least one.
+- AWS credentials live here, not at repo-wide scope.
 - Reference via `environment: e2e-prod` on the relevant job.
 
-## 7. Email forwarding for private vuln reports (optional)
+## 7. Tagging a release
 
-If you want PVR submissions to also reach a personal email, add a **Security advisory contact** in Settings → Security advisories. Not strictly necessary — GitHub already notifies repo admins.
+1. Open a PR that bumps `CHANGELOG.md`'s `[Unreleased]` section to a new version header.
+2. After merge, tag from `main`:
+   ```bash
+   git tag -s vX.Y.Z -m "vX.Y.Z"
+   git push origin vX.Y.Z
+   ```
+3. The `release.yml` workflow builds binaries via goreleaser and attaches them to a **draft** GitHub release.
+4. Review the draft and publish it manually.
