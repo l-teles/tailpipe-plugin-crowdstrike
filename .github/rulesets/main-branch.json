@@ -1,0 +1,45 @@
+{
+  "_comment": "GitHub Ruleset for the main branch. Import via: gh api -X POST 'repos/l-teles/tailpipe-plugin-crowdstrike/rulesets' --input .github/rulesets/main-branch.json. Update an existing ruleset via PUT to /rulesets/{id} with the same body. Requires repo admin scope.",
+  "name": "main-branch-protection",
+  "target": "branch",
+  "enforcement": "active",
+  "bypass_actors": [],
+  "conditions": {
+    "ref_name": {
+      "include": ["~DEFAULT_BRANCH"],
+      "exclude": []
+    }
+  },
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    { "type": "required_linear_history" },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 1,
+        "dismiss_stale_reviews_on_push": true,
+        "require_code_owner_review": true,
+        "require_last_push_approval": true,
+        "required_review_thread_resolution": true,
+        "allowed_merge_methods": ["squash"]
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": true,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          { "context": "build & test" },
+          { "context": "golangci-lint" },
+          { "context": "govulncheck" },
+          { "context": "gosec" },
+          { "context": "zizmor (GH Actions audit)" },
+          { "context": "analyze (go)" },
+          { "context": "at-least-one release-drafter label" }
+        ]
+      }
+    }
+  ]
+}

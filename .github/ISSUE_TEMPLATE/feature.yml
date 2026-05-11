@@ -1,0 +1,41 @@
+name: 🚀 Feature request
+description: Suggest a new table, source, or behaviour
+labels: ["feature"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: A use case or query you'd like to run but can't today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: |
+        Sketch of the API / SQL surface you'd expect. For new tables include the FDR record type, the wire-format sample (sanitised), and the columns you'd promote vs. leave in `payload`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you've tried, or other plugins / tools that solve this differently.
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      multiple: false
+      options:
+        - New table
+        - New source
+        - New column on existing table
+        - SQL ergonomics / query examples in docs
+        - Build / release / packaging
+        - Other
+    validations:
+      required: true

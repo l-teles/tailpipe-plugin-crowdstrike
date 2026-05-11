@@ -1,0 +1,51 @@
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+
+categories:
+  - title: "💥 Breaking changes"
+    labels:
+      - "breaking"
+      - "major"
+  - title: "🚀 Features"
+    labels:
+      - "feature"
+      - "enhancement"
+  - title: "🐛 Bug fixes"
+    labels:
+      - "fix"
+      - "bug"
+  - title: "🔒 Security"
+    labels:
+      - "security"
+  - title: "🧰 Maintenance"
+    labels:
+      - "chore"
+      - "refactor"
+      - "test"
+      - "ci"
+  - title: "📚 Documentation"
+    labels:
+      - "docs"
+  - title: "📦 Dependencies"
+    labels:
+      - "deps"
+      - "dependencies"
+
+change-template: "- $TITLE (#$NUMBER) @$AUTHOR"
+change-title-escapes: '\<*_&'
+
+version-resolver:
+  major:
+    labels: ["breaking", "major"]
+  minor:
+    labels: ["feature", "enhancement"]
+  patch:
+    labels: ["fix", "bug", "security", "chore", "refactor", "test", "ci", "docs", "deps"]
+  default: patch
+
+template: |
+  ## What's Changed
+
+  $CHANGES
+
+  **Full Changelog**: https://github.com/l-teles/tailpipe-plugin-crowdstrike/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION

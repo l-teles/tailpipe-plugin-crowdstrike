@@ -1,0 +1,49 @@
+# golangci-lint v2 configuration.
+# Bumping golangci-lint past v1 requires the `version: "2"` schema.
+
+version: "2"
+
+run:
+  timeout: 10m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - errcheck # unchecked error returns
+    - errorlint # error-wrapping correctness (errors.Is/As, %w)
+    - govet # standard suite (printf, assign, etc.)
+    - ineffassign # ineffectual assignments
+    - staticcheck # SA*/S*/ST* analyses
+    - unused # unused symbols
+    - gosec # SAST: every gosec finding is treated as a build failure
+    - revive # style + complexity (replaces deprecated golint)
+    - misspell
+    - bodyclose # require Response.Body to be closed
+    - copyloopvar # 1.22+ loop-var capture
+    - tparallel # check t.Parallel() usage
+    - thelper # t.Helper() in test helpers
+  settings:
+    errcheck:
+      exclude-functions:
+        - (io.Closer).Close
+        - (*os.File).Close
+    revive:
+      rules:
+        - name: exported
+          disabled: true # we don't enforce package-level docstrings on every exported symbol
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
