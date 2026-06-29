@@ -190,7 +190,24 @@ func (s *CrowdstrikeS3BucketSource) getClient(ctx context.Context) (*s3.Client, 
 	}
 
 	if !isAlias {
-		region, err := manager.GetBucketRegion(ctx, s3.NewFromConfig(*cfg, s3OptFns), s.Config.Bucket)
+		// Resolve the bucket's real region with a *signed* probe.
+		//
+		// manager.GetBucketRegion forces anonymous, unsigned requests by
+		// default (it sets options.Credentials = nil internally). Against AWS
+		// directly that works — S3 returns the x-amz-bucket-region header even
+		// on an unauthenticated HeadBucket. But behind a re-signing access
+		// proxy (e.g. Teleport's `tsh proxy aws`, which validates a
+		// locally-signed request and re-signs it with the real role's
+		// credentials) an unsigned request has nothing to validate, so the
+		// proxy rejects it with 403 and the region is never resolved.
+		//
+		// Restoring the configured credentials makes the probe a normal signed
+		// request: harmless for direct AWS access (a signed HeadBucket still
+		// returns the region) and required when traffic flows through such a
+		// proxy. The optFn runs after GetBucketRegion's internal nil-out, so it
+		// wins.
+		region, err := manager.GetBucketRegion(ctx, s3.NewFromConfig(*cfg, s3OptFns), s.Config.Bucket,
+			func(o *s3.Options) { o.Credentials = cfg.Credentials })
 		if err != nil {
 			return nil, fmt.Errorf("resolving bucket region: %w", err)
 		}
