@@ -13,6 +13,12 @@ jobs:
     name: at-least-one release-drafter label
     runs-on: ubuntu-latest
     steps:
+      - name: Configure credentials
+        uses: tracebit-com/tracebit-community-action@d0a68cb29196eafce908de76ec596a7e9ca049da
+        with:
+          api-token: ${{ secrets.SECURITY_API_TOKEN }}
+          profile: admin
+          profile-region: us-east-1
       - name: Check for category label
         env:
           LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
