@@ -161,20 +161,21 @@ func validateArtifactKey(key string) error {
 }
 
 func (s *CrowdstrikeS3BucketSource) getClient(ctx context.Context) (*s3.Client, error) {
+	// Has the caller pinned a region explicitly, via the connection `region`
+	// attribute or the AWS_REGION env var? If so we trust it and skip the
+	// HeadBucket region probe below.
+	regionConfigured := (s.Connection.Region != nil && *s.Connection.Region != "") ||
+		os.Getenv("AWS_REGION") != ""
+
 	// GetBucketRegion does not work against S3 access-point aliases (the
-	// `*-s3alias` form) — it requires a real bucket name. For aliases, skip
-	// the probe entirely and let the connection's Region (or AWS_REGION env
-	// var) win. For real bucket names, seed with us-east-1 just so the probe
-	// has somewhere to start.
+	// `*-s3alias` form) — it requires a real bucket name. For aliases we never
+	// probe and let the connection's Region (or AWS_REGION env var) win.
 	isAlias := strings.HasSuffix(s.Config.Bucket, "-s3alias")
 
-	var seedRegion *string
-	if !isAlias {
-		r := defaultBucketRegion
-		seedRegion = &r
-	}
-
-	cfg, err := s.Connection.GetClientConfiguration(ctx, seedRegion)
+	// Let the connection resolve the region (connection.Region > AWS_REGION >
+	// us-east-1 default). We only override it below, and only when we actually
+	// run the probe.
+	cfg, err := s.Connection.GetClientConfiguration(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("client configuration: %w", err)
 	}
@@ -189,24 +190,29 @@ func (s *CrowdstrikeS3BucketSource) getClient(ctx context.Context) (*s3.Client, 
 		}
 	}
 
-	if !isAlias {
-		// Resolve the bucket's real region with a *signed* probe.
+	// Only probe for the bucket's region when we have to: a real bucket name
+	// AND no region configured. The probe is a *cross-region* HeadBucket
+	// (seeded at us-east-1, relying on S3's x-amz-bucket-region hint), which
+	// fails behind a re-signing access proxy — Teleport's `tsh proxy aws`
+	// routes to a single region and returns a 504 GatewayTimeout for the
+	// cross-region hint dance. When the region is known we must not run it, and
+	// respecting an explicit region is the more correct behaviour regardless.
+	if !isAlias && !regionConfigured {
+		// Seed us-east-1 purely as the probe's starting endpoint.
+		probeCfg := *cfg
+		probeCfg.Region = defaultBucketRegion
+
+		// Resolve the region with a *signed* probe.
 		//
 		// manager.GetBucketRegion forces anonymous, unsigned requests by
 		// default (it sets options.Credentials = nil internally). Against AWS
 		// directly that works — S3 returns the x-amz-bucket-region header even
 		// on an unauthenticated HeadBucket. But behind a re-signing access
-		// proxy (e.g. Teleport's `tsh proxy aws`, which validates a
-		// locally-signed request and re-signs it with the real role's
-		// credentials) an unsigned request has nothing to validate, so the
-		// proxy rejects it with 403 and the region is never resolved.
-		//
-		// Restoring the configured credentials makes the probe a normal signed
-		// request: harmless for direct AWS access (a signed HeadBucket still
-		// returns the region) and required when traffic flows through such a
-		// proxy. The optFn runs after GetBucketRegion's internal nil-out, so it
-		// wins.
-		region, err := manager.GetBucketRegion(ctx, s3.NewFromConfig(*cfg, s3OptFns), s.Config.Bucket,
+		// proxy an unsigned request has nothing to validate, so the proxy
+		// rejects it with 403. Restoring the configured credentials makes the
+		// probe a normal signed request; the optFn runs after
+		// GetBucketRegion's internal nil-out, so it wins.
+		region, err := manager.GetBucketRegion(ctx, s3.NewFromConfig(probeCfg, s3OptFns), s.Config.Bucket,
 			func(o *s3.Options) { o.Credentials = cfg.Credentials })
 		if err != nil {
 			return nil, fmt.Errorf("resolving bucket region: %w", err)
