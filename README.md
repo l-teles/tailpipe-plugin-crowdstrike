@@ -47,7 +47,7 @@ Configure credentials any way the AWS SDK can find them — named profile, `AWS_
 ```hcl
 connection "crowdstrike" "default" {
   profile = "crowdstrike-fdr"
-  region  = "eu-central-1"  # required for *-s3alias buckets — the bucket-region probe doesn't work for access-point aliases
+  region  = "eu-central-1"  # set explicitly: required for *-s3alias aliases and re-signing proxies (e.g. Teleport); optional but recommended for real buckets (skips the region probe)
 }
 
 partition "crowdstrike_fdr_event" "prod" {
@@ -91,6 +91,7 @@ Per-table docs and example queries live under [`docs/tables/`](docs/tables/).
 - **`payload` JSON column** — every table carries one. Anything not promoted to a typed column stays queryable via `payload->>'$.Field'`.
 - **PII** — `aip`, `LocalAddressIP4`, `UserName`, `User`, `MAC`, `ExternalIP`, `UserSid_readable`, and others are personally identifying. They are ingested as-is. Restrict access to the local DuckLake store and downstream queries; see [SECURITY.md](SECURITY.md).
 - **Operator hardening** — use an IAM principal scoped to the tenant prefix only, not the whole bucket. Prefer profile / SSO / IRSA over static keys in HCL.
+- **Collection performance** — the plugin prunes S3 prefixes by the `--from`/`--to` window, but only on the date partitions your `file_layout` declares. For ideal performance organise the bucket **date-first** (`year=YYYY/month=MM/day=DD/hour=HH/platform=<plat>/…`) so a narrow window lists only the matching days. CrowdStrike's default nests dates under `batch=<uuid>/`, forcing the walk to enumerate every batch prefix before it can prune — noticeably slower on large buckets. Details and a ready-to-use `file_layout` in the [source docs](docs/sources/crowdstrike_s3_bucket/index.md#performance-prefer-a-date-first-layout).
 
 ## Contributing & security
 
