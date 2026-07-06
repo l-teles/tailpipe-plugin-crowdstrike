@@ -3,6 +3,7 @@ package s3_bucket
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestValidateArtifactKey covers the path-traversal defence in DownloadArtifact:
@@ -51,6 +52,67 @@ func TestValidateArtifactKey(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("error %q should mention %q", err.Error(), tc.want)
+			}
+		})
+	}
+}
+
+// TestDirStartsAfter covers the upper-boundary prefix pruning that keeps a
+// narrow-window collect from walking every partition newer than --to. Pruning
+// is layout-driven: it must only act on date partitions the file_layout
+// declares, and must be a no-op for any other bucket structure.
+func TestDirStartsAfter(t *testing.T) {
+	t.Parallel()
+
+	// Collecting a single day: --from 2026-06-02 --to 2026-06-03 gives an upper
+	// boundary at the start of 2026-06-03.
+	to := time.Date(2026, 6, 3, 0, 0, 0, 0, time.UTC)
+
+	// A date-first layout and the Hive FDR variant both partition by
+	// year=/month=/day=/hour=.
+	hive := "year=%{YEAR:year}/month=%{MONTHNUM:month}/day=%{MONTHDAY:day}/hour=%{HOUR:hour}/platform=%{DATA:platform}/%{DATA}.gz"
+	// The flat FDR variant has no date partitions at all.
+	flat := "%{DATA:batch}/%{DATA}.gz"
+
+	cases := []struct {
+		name   string
+		prefix string
+		layout string
+		to     time.Time
+		want   bool
+	}{
+		// Inside or before the window — must be walked.
+		{"year enclosing window", "data/year=2026/", hive, to, false},
+		{"month enclosing window", "data/year=2026/month=06/", hive, to, false},
+		{"target day", "data/year=2026/month=06/day=02/", hive, to, false},
+		{"hour within target day", "data/year=2026/month=06/day=02/hour=13/", hive, to, false},
+		// The boundary day itself starts exactly at `to` (not strictly after),
+		// so it is kept — it can hold the 00:00 instant.
+		{"boundary day kept", "data/year=2026/month=06/day=03/", hive, to, false},
+		{"earlier month", "data/year=2026/month=05/", hive, to, false},
+
+		// Strictly after the window — must be pruned.
+		{"next day", "data/year=2026/month=06/day=04/", hive, to, true},
+		{"next month", "data/year=2026/month=07/", hive, to, true},
+		{"next year", "data/year=2027/", hive, to, true},
+
+		// Layout has no date partitions — never prune, even if a key happens to
+		// contain a "year=" substring.
+		{"flat layout, plain prefix", "abc123def/", flat, to, false},
+		{"flat layout, coincidental year= token", "weird/year=2099/", flat, to, false},
+
+		// No date tokens in the prefix (Hive layout, but shallow / alias-style) —
+		// never prune.
+		{"hive layout, no tokens in prefix", "tenant-id/fdrv2/aidmaster/", hive, to, false},
+		// Zero upper boundary (no --to) — never prune.
+		{"zero to", "data/year=2027/", hive, time.Time{}, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := dirStartsAfter(tc.prefix, tc.layout, tc.to); got != tc.want {
+				t.Errorf("dirStartsAfter(%q, layout, %s) = %v, want %v", tc.prefix, tc.to.Format("2006-01-02"), got, tc.want)
 			}
 		})
 	}

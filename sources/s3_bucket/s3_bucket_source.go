@@ -10,7 +10,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
@@ -161,20 +163,21 @@ func validateArtifactKey(key string) error {
 }
 
 func (s *CrowdstrikeS3BucketSource) getClient(ctx context.Context) (*s3.Client, error) {
+	// Has the caller pinned a region explicitly, via the connection `region`
+	// attribute or the AWS_REGION env var? If so we trust it and skip the
+	// HeadBucket region probe below.
+	regionConfigured := (s.Connection.Region != nil && *s.Connection.Region != "") ||
+		os.Getenv("AWS_REGION") != ""
+
 	// GetBucketRegion does not work against S3 access-point aliases (the
-	// `*-s3alias` form) — it requires a real bucket name. For aliases, skip
-	// the probe entirely and let the connection's Region (or AWS_REGION env
-	// var) win. For real bucket names, seed with us-east-1 just so the probe
-	// has somewhere to start.
+	// `*-s3alias` form) — it requires a real bucket name. For aliases we never
+	// probe and let the connection's Region (or AWS_REGION env var) win.
 	isAlias := strings.HasSuffix(s.Config.Bucket, "-s3alias")
 
-	var seedRegion *string
-	if !isAlias {
-		r := defaultBucketRegion
-		seedRegion = &r
-	}
-
-	cfg, err := s.Connection.GetClientConfiguration(ctx, seedRegion)
+	// Let the connection resolve the region (connection.Region > AWS_REGION >
+	// us-east-1 default). We only override it below, and only when we actually
+	// run the probe.
+	cfg, err := s.Connection.GetClientConfiguration(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("client configuration: %w", err)
 	}
@@ -189,24 +192,29 @@ func (s *CrowdstrikeS3BucketSource) getClient(ctx context.Context) (*s3.Client, 
 		}
 	}
 
-	if !isAlias {
-		// Resolve the bucket's real region with a *signed* probe.
+	// Only probe for the bucket's region when we have to: a real bucket name
+	// AND no region configured. The probe is a *cross-region* HeadBucket
+	// (seeded at us-east-1, relying on S3's x-amz-bucket-region hint), which
+	// fails behind a re-signing access proxy — Teleport's `tsh proxy aws`
+	// routes to a single region and returns a 504 GatewayTimeout for the
+	// cross-region hint dance. When the region is known we must not run it, and
+	// respecting an explicit region is the more correct behaviour regardless.
+	if !isAlias && !regionConfigured {
+		// Seed us-east-1 purely as the probe's starting endpoint.
+		probeCfg := *cfg
+		probeCfg.Region = defaultBucketRegion
+
+		// Resolve the region with a *signed* probe.
 		//
 		// manager.GetBucketRegion forces anonymous, unsigned requests by
 		// default (it sets options.Credentials = nil internally). Against AWS
 		// directly that works — S3 returns the x-amz-bucket-region header even
 		// on an unauthenticated HeadBucket. But behind a re-signing access
-		// proxy (e.g. Teleport's `tsh proxy aws`, which validates a
-		// locally-signed request and re-signs it with the real role's
-		// credentials) an unsigned request has nothing to validate, so the
-		// proxy rejects it with 403 and the region is never resolved.
-		//
-		// Restoring the configured credentials makes the probe a normal signed
-		// request: harmless for direct AWS access (a signed HeadBucket still
-		// returns the region) and required when traffic flows through such a
-		// proxy. The optFn runs after GetBucketRegion's internal nil-out, so it
-		// wins.
-		region, err := manager.GetBucketRegion(ctx, s3.NewFromConfig(*cfg, s3OptFns), s.Config.Bucket,
+		// proxy an unsigned request has nothing to validate, so the proxy
+		// rejects it with 403. Restoring the configured credentials makes the
+		// probe a normal signed request; the optFn runs after
+		// GetBucketRegion's internal nil-out, so it wins.
+		region, err := manager.GetBucketRegion(ctx, s3.NewFromConfig(probeCfg, s3OptFns), s.Config.Bucket,
 			func(o *s3.Options) { o.Credentials = cfg.Credentials })
 		if err != nil {
 			return nil, fmt.Errorf("resolving bucket region: %w", err)
@@ -215,6 +223,87 @@ func (s *CrowdstrikeS3BucketSource) getClient(ctx context.Context) (*s3.Client, 
 	}
 
 	return s3.NewFromConfig(*cfg, s3OptFns), nil
+}
+
+// dirStartsAfterCollectionWindow reports whether every artifact under the given
+// S3 directory prefix would fall strictly after the collection window's upper
+// boundary (--to), so the whole subtree can be skipped without listing it.
+func (s *CrowdstrikeS3BucketSource) dirStartsAfterCollectionWindow(prefix string) bool {
+	return dirStartsAfter(prefix, typehelpers.SafeString(s.Config.GetFileLayout()), s.CollectionTimeRange.UpperBoundary)
+}
+
+// dirStartsAfter is the pure core of dirStartsAfterCollectionWindow. Given a key
+// prefix, the configured file layout, and the window's upper boundary, it
+// computes the earliest instant the directory can contain from its
+// year=/month=/day=/hour= Hive tokens and reports whether that instant is
+// strictly after `to` (so nothing inside can match).
+//
+// It is deliberately driven by the layout, not the raw prefix: a date token is
+// only trusted when the layout *declares* it as a partition literal (e.g.
+// "year=%{YEAR:year}/"). The plugin accepts any user-supplied file_layout, and
+// bucket structures vary — the flat FDR variant ("<uuid>/part-*.gz") and any
+// non-Hive scheme carry no date partitions, so they never prune and the walk
+// falls back to listing everything. A zero `to`, a layout without a year=
+// partition, or a prefix not yet deep enough to carry the year token all yield
+// false.
+func dirStartsAfter(prefix, layout string, to time.Time) bool {
+	// Only prune when the layout partitions by year using the Hive "year="
+	// literal; otherwise a "year=NNNN" substring in a key is not a date
+	// partition we can safely reason about.
+	if to.IsZero() || !strings.Contains(layout, "year=") {
+		return false
+	}
+
+	year, ok := dirTimeToken(prefix, "year")
+	if !ok {
+		return false
+	}
+
+	// For each finer unit, default to the start of the period and refine it
+	// only when the layout declares that partition AND the prefix carries it.
+	month, day, hour := 1, 1, 0
+	if strings.Contains(layout, "month=") {
+		if v, ok := dirTimeToken(prefix, "month"); ok {
+			month = v
+		}
+	}
+	if strings.Contains(layout, "day=") {
+		if v, ok := dirTimeToken(prefix, "day"); ok {
+			day = v
+		}
+	}
+	if strings.Contains(layout, "hour=") {
+		if v, ok := dirTimeToken(prefix, "hour"); ok {
+			hour = v
+		}
+	}
+
+	earliest := time.Date(year, time.Month(month), day, hour, 0, 0, 0, time.UTC)
+	return earliest.After(to)
+}
+
+// dirTimeToken extracts the integer value of a `name=NNN` token from an S3 key
+// prefix (e.g. "year" from ".../year=2026/..."). Returns false if the token is
+// absent or not followed by digits.
+func dirTimeToken(prefix, name string) (int, bool) {
+	marker := name + "="
+	idx := strings.Index(prefix, marker)
+	if idx < 0 {
+		return 0, false
+	}
+	rest := prefix[idx+len(marker):]
+	end := 0
+	for end < len(rest) && rest[end] >= '0' && rest[end] <= '9' {
+		end++
+	}
+	if end == 0 {
+		return 0, false
+	}
+	v, err := strconv.Atoi(rest[:end])
+	if err != nil {
+		return 0, false
+	}
+	return v, true
 }
 
 func (s *CrowdstrikeS3BucketSource) walkS3(ctx context.Context, bucket, prefix string, layouts []string, filterMap map[string]*filter.SqlFilter, g *grok.Grok) error {
@@ -237,6 +326,18 @@ func (s *CrowdstrikeS3BucketSource) walkS3(ctx context.Context, bucket, prefix s
 
 		for _, dir := range page.CommonPrefixes {
 			dirPrefix := typehelpers.SafeString(*dir.Prefix)
+
+			// Prune subtrees that start after the requested window's upper
+			// boundary (--to). The SDK's WalkNode only prunes the lower (--from)
+			// boundary during the walk ("forward collection"), so without this
+			// every partition newer than --to is still listed — turning a
+			// one-day collect into a full walk from --from to now. This skips a
+			// ListObjectsV2 round-trip per pruned subtree and is a no-op for
+			// layouts with no date tokens (e.g. the access-point alias buckets).
+			if s.dirStartsAfterCollectionWindow(dirPrefix) {
+				continue
+			}
+
 			err = s.WalkNode(ctx, dirPrefix, "", layouts, true, g, filterMap)
 			if err != nil {
 				if errors.Is(err, fs.SkipDir) {
