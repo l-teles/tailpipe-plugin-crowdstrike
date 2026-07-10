@@ -403,8 +403,8 @@ github.com/tkrajina/go-reflector v0.5.8 h1:yPADHrwmUbMq4RGEyaOUpz2H90sRsETNVpjzo
 github.com/tkrajina/go-reflector v0.5.8/go.mod h1:ECbqLgccecY5kPmPmXg1MrHW585yMcDkVl6IvJe64T4=
 github.com/turbot/go-kit v1.3.1 h1:RGyqY9E57L0HVBLJ64ArzcIy/8jC8YaK9da+VMtoq3o=
 github.com/turbot/go-kit v1.3.1/go.mod h1:hW2nItIxNEYRQbwqsMKmEfyKiuvKZPnjuYso65b8DL4=
-github.com/turbot/pipe-fittings/v2 v2.9.1 h1:1dwVsaIsdUIVLfRlvhNEm7KxTmpPuUoyEBbbioaoOUw=
-github.com/turbot/pipe-fittings/v2 v2.9.1/go.mod h1:OmmhCd4ALeWwfUpwZN/0pTNhfNmh/kwewOHRVWsRHY4=
+github.com/turbot/pipe-fittings/v2 v2.9.2 h1:ts/Pkin14RNQioM78JSafEt66LdzZg6IMSn7s3Cfjj4=
+github.com/turbot/pipe-fittings/v2 v2.9.2/go.mod h1:OmmhCd4ALeWwfUpwZN/0pTNhfNmh/kwewOHRVWsRHY4=
 github.com/turbot/pipes-sdk-go v0.16.1 h1:FaFVlyANGWCK1oekFq/oN4h4MKMWcc2DjlSt9VTj/jg=
 github.com/turbot/pipes-sdk-go v0.16.1/go.mod h1:z/VTxsl5X1IAsnmjTf60mrBgOALzdw/vjKwgSvqpxls=
 github.com/turbot/tailpipe-plugin-sdk v0.9.4 h1:2lqchYcUgO+U7M7BvWXXh3l/EcbBRWRQK9o1F8autBw=
