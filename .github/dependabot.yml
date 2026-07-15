@@ -12,22 +12,37 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "deps"
+    # Group minor + patch bumps so they land as batched PRs. Major bumps are
+    # deliberately left out of every group so each arrives as its own PR for
+    # individual review.
     groups:
       aws-sdk:
         patterns:
           - "github.com/aws/aws-sdk-go-v2*"
+        update-types:
+          - "minor"
+          - "patch"
       tailpipe-sdk:
         patterns:
           - "github.com/turbot/tailpipe-plugin-sdk"
           - "github.com/turbot/pipe-fittings/*"
           - "github.com/turbot/go-kit"
+        update-types:
+          - "minor"
+          - "patch"
       otel:
         patterns:
           - "go.opentelemetry.io/*"
+        update-types:
+          - "minor"
+          - "patch"
       gcp:
         patterns:
           - "cloud.google.com/*"
           - "google.golang.org/*"
+        update-types:
+          - "minor"
+          - "patch"
       everything-else:
         patterns:
           - "*"
@@ -37,6 +52,9 @@ updates:
           - "go.opentelemetry.io/*"
           - "cloud.google.com/*"
           - "google.golang.org/*"
+        update-types:
+          - "minor"
+          - "patch"
     cooldown:
       default-days: 7
 
@@ -50,6 +68,13 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "deps(sec)"
+    groups:
+      security-tools:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
     cooldown:
       default-days: 7
 
@@ -60,5 +85,12 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "ci"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
     cooldown:
       default-days: 7
