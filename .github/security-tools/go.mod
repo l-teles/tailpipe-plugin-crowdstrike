@@ -3,7 +3,7 @@
 // Keep this in sync with what `.github/workflows/security.yml` invokes.
 module github.com/l-teles/tailpipe-plugin-crowdstrike/.github/security-tools
 
-go 1.26.3
+go 1.26.5
 
 require (
 	github.com/securego/gosec/v2 v2.26.1
