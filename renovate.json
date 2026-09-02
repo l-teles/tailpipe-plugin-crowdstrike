@@ -1,0 +1,85 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "prConcurrentLimit": 5,
+  "packageRules": [
+    {
+      "matchManagers": ["gomod"],
+      "matchFileNames": ["go.mod"],
+      "matchDepTypes": ["require", "indirect"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "commitMessagePrefix": "deps:",
+      "groupName": "everything-else"
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchFileNames": ["go.mod"],
+      "matchDepTypes": ["require", "indirect"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchPackageNames": ["/^github\\.com\\/aws\\/aws-sdk-go-v2/"],
+      "commitMessagePrefix": "deps:",
+      "groupName": "aws-sdk"
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchFileNames": ["go.mod"],
+      "matchDepTypes": ["require", "indirect"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchPackageNames": [
+        "github.com/turbot/tailpipe-plugin-sdk",
+        "/^github\\.com\\/turbot\\/pipe-fittings\\//",
+        "github.com/turbot/go-kit"
+      ],
+      "commitMessagePrefix": "deps:",
+      "groupName": "tailpipe-sdk"
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchFileNames": ["go.mod"],
+      "matchDepTypes": ["require", "indirect"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchPackageNames": ["/^go\\.opentelemetry\\.io\\//"],
+      "commitMessagePrefix": "deps:",
+      "groupName": "otel"
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchFileNames": ["go.mod"],
+      "matchDepTypes": ["require", "indirect"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchPackageNames": ["/^cloud\\.google\\.com\\//", "/^google\\.golang\\.org\\//"],
+      "commitMessagePrefix": "deps:",
+      "groupName": "gcp"
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchFileNames": ["go.mod"],
+      "matchDepTypes": ["toolchain"],
+      "separateMinorPatch": true,
+      "commitMessagePrefix": "deps:",
+      "description": "Left ungrouped so a Go stdlib security patch merges as its own PR, independent of regular dependency bumps."
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchFileNames": [".github/security-tools/go.mod"],
+      "matchDepTypes": ["require", "indirect"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "commitMessagePrefix": "deps(sec):",
+      "groupName": "security-tools"
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchFileNames": [".github/security-tools/go.mod"],
+      "matchDepTypes": ["toolchain"],
+      "separateMinorPatch": true,
+      "commitMessagePrefix": "deps(sec):",
+      "description": "Left ungrouped so a Go stdlib security patch merges as its own PR, independent of regular dependency bumps."
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "commitMessagePrefix": "ci:",
+      "groupName": "github-actions"
+    }
+  ]
+}
