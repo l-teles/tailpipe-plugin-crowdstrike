@@ -1,11 +1,17 @@
 module github.com/l-teles/tailpipe-plugin-crowdstrike
 
-// Minimum Go language version, pinned to the latest patched release —
-// anything older has known stdlib vulns (e.g. GO-2026-5037 in crypto/x509
-// and GO-2026-5039 in net/textproto, fixed in go1.26.4, and GO-2026-5856,
-// an Encrypted Client Hello privacy leak in crypto/tls fixed in go1.26.5)
-// and can't build this plugin safely.
-go 1.26.5
+// go is the minimum language version this module requires; toolchain below
+// is the exact Go release actually used to build it, pinned to the latest
+// patched release — anything older has known stdlib vulns (e.g. GO-2026-5037
+// in crypto/x509 and GO-2026-5039 in net/textproto, fixed in go1.26.4, and
+// GO-2026-5856, an Encrypted Client Hello privacy leak in crypto/tls fixed in
+// go1.26.5) and can't build this plugin safely. Renovate tracks toolchain
+// like any other dependency and proposes a bump on every new Go patch
+// release; it does not touch go, which stays put until a language feature
+// requires raising it.
+go 1.26.0
+
+toolchain go1.26.7
 
 // Force github.com/ulikunitz/xz to a version that fixes GO-2025-3922 (memory
 // leak when decoding corrupted multi-stream LZMA archives). Pulled in
