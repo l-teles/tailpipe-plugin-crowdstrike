@@ -11,7 +11,7 @@ module github.com/l-teles/tailpipe-plugin-crowdstrike
 // requires raising it.
 go 1.26.0
 
-toolchain go1.26.7
+toolchain go1.26.8
 
 // Force github.com/ulikunitz/xz to a version that fixes GO-2025-3922 (memory
 // leak when decoding corrupted multi-stream LZMA archives). Pulled in
