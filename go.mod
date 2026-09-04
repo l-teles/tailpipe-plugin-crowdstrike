@@ -17,7 +17,7 @@ toolchain go1.26.8
 // leak when decoding corrupted multi-stream LZMA archives). Pulled in
 // transitively via hashicorp/go-getter → pipe-fittings → tailpipe-plugin-sdk.
 // Remove this once the SDK ships with a clean transitive tree.
-replace github.com/ulikunitz/xz => github.com/ulikunitz/xz v0.5.15
+replace github.com/ulikunitz/xz => github.com/ulikunitz/xz v0.5.16
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.46.0
