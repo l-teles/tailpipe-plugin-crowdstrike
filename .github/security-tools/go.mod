@@ -5,7 +5,7 @@ module github.com/l-teles/tailpipe-plugin-crowdstrike/.github/security-tools
 
 go 1.26.0
 
-toolchain go1.26.8
+toolchain go1.27.1
 
 require (
 	github.com/securego/gosec/v2 v2.26.1
