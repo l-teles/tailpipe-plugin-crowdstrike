@@ -419,6 +419,8 @@ github.com/turbot/pipes-sdk-go v0.16.1 h1:FaFVlyANGWCK1oekFq/oN4h4MKMWcc2DjlSt9V
 github.com/turbot/pipes-sdk-go v0.16.1/go.mod h1:z/VTxsl5X1IAsnmjTf60mrBgOALzdw/vjKwgSvqpxls=
 github.com/turbot/tailpipe-plugin-sdk v0.9.4 h1:2lqchYcUgO+U7M7BvWXXh3l/EcbBRWRQK9o1F8autBw=
 github.com/turbot/tailpipe-plugin-sdk v0.9.4/go.mod h1:Egojp0j7+th/4Bh6muMuF6aZa5iE3MuiJ4pzBo0J2mg=
+github.com/turbot/tailpipe-plugin-sdk v0.9.5 h1:q+TbVENBIf7JZxzsNzqGae+KvyJiDnxJ2koGLmw0TOM=
+github.com/turbot/tailpipe-plugin-sdk v0.9.5/go.mod h1:8gXNAl8kZCy2rjSf3fSbpct3olyhyaQY/LsP5/3fcIY=
 github.com/turbot/terraform-components v0.0.0-20260326173411-f13124d16b98 h1:cFu8VxOndxXC7FT6hAmSFImzvD/Dy8KnbZFuXrPPpDA=
 github.com/turbot/terraform-components v0.0.0-20260326173411-f13124d16b98/go.mod h1:QJMOFtDVHtXLCJr6luh4oFgk6dtdCImDh7XbIXxnGsc=
 github.com/ulikunitz/xz v0.5.15 h1:9DNdB5s+SgV3bQ2ApL10xRc35ck0DuIX/isZvIk+ubY=
