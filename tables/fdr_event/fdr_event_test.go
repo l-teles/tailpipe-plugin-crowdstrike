@@ -2,39 +2,46 @@ package fdr_event
 
 import (
 	"context"
+	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/turbot/tailpipe-plugin-sdk/schema"
+
+	"github.com/l-teles/tailpipe-plugin-crowdstrike/tables/common"
 )
 
-func TestExtract_HandlesSensorAndExternalApiEvents(t *testing.T) {
-	t.Parallel()
-
+func loadFixture(t *testing.T) []*FdrEvent {
+	t.Helper()
 	raw, err := os.ReadFile("testdata/sample.jsonl")
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
-
-	rows, err := (FdrEventExtractor{}).Extract(context.Background(), raw)
-	if err != nil {
-		t.Fatalf("extract: %v", err)
+	m := common.NewJSONLinesMapper("fdr_event_mapper", mapFdrEvent)
+	var rows []*FdrEvent
+	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+		row, err := m.Map(context.Background(), line)
+		if err != nil {
+			t.Fatalf("map: %v", err)
+		}
+		rows = append(rows, row)
 	}
+	return rows
+}
+
+func TestMap_HandlesSensorAndExternalApiEvents(t *testing.T) {
+	t.Parallel()
+
+	rows := loadFixture(t)
 	if got, want := len(rows), 2; got != want {
 		t.Fatalf("row count: got %d, want %d", got, want)
 	}
 
 	// Row 0 is a Win sensor event (EndOfProcess); row 1 is an external-API event
 	// (Event_ModuleSummaryInfoEvent on platform=Other).
-	sensor, ok := rows[0].(*FdrEvent)
-	if !ok {
-		t.Fatalf("row[0] type: got %T", rows[0])
-	}
-	external, ok := rows[1].(*FdrEvent)
-	if !ok {
-		t.Fatalf("row[1] type: got %T", rows[1])
-	}
+	sensor, external := rows[0], rows[1]
 
 	// ---- sensor row ----
 	if got := strDeref(sensor.EventSimpleName); got != "EndOfProcess" {
@@ -49,14 +56,14 @@ func TestExtract_HandlesSensorAndExternalApiEvents(t *testing.T) {
 	if got := strDeref(sensor.Aip); got == "" {
 		t.Errorf("sensor.Aip: empty")
 	}
-	// Synthetic fixture uses a fixed epoch (1700000000.000 = 2023-11-14 UTC) to
-	// keep the test reproducible and the fixture free of real timestamps.
-	if got := strDeref(sensor.ContextTimeStamp); got != "1700000000.000" {
-		t.Errorf("sensor.ContextTimeStamp: got %q, want 1700000000.000", got)
+	// Synthetic fixture uses a fixed epoch (1700000000 = 2023-11-14 UTC).
+	if sensor.ContextTimeStamp == nil || !sensor.ContextTimeStamp.Equal(time.Unix(1700000000, 0)) {
+		t.Errorf("sensor.ContextTimeStamp: got %v", sensor.ContextTimeStamp)
 	}
-	// Synthetic fixture has 25 keys; assertion is informational, not strict,
-	// so adding fields to the fixture doesn't break the test.
-	t.Logf("sensor.Payload key count: %d", len(sensor.Payload))
+	// Sensor `timestamp` is epoch ms.
+	if sensor.Timestamp == nil || !sensor.Timestamp.Equal(time.Unix(1700000000, 0)) {
+		t.Errorf("sensor.Timestamp: got %v", sensor.Timestamp)
+	}
 	if _, ok := sensor.Payload["LocalAddressIP4"]; !ok {
 		t.Errorf("sensor.Payload missing LocalAddressIP4 — uncommon fields should still be queryable via payload")
 	}
@@ -71,14 +78,15 @@ func TestExtract_HandlesSensorAndExternalApiEvents(t *testing.T) {
 	if got := strDeref(external.AgentIdString); got == "" {
 		t.Errorf("external.AgentIdString: empty")
 	}
-	// Cross-fill: external-API events have no top-level `aid` field but should
-	// still populate Cid (the build helper copies CustomerIdString → Cid when
-	// the lowercase `cid` is missing).
 	if got := strDeref(external.Cid); got == "" {
 		t.Errorf("external.Cid: should be cross-filled from CustomerIdString")
 	}
-	if external.UTCTimestamp == nil {
-		t.Errorf("external.UTCTimestamp: nil")
+	if external.UTCTimestamp == nil || !external.UTCTimestamp.Equal(time.Unix(1700000000, 0)) {
+		t.Errorf("external.UTCTimestamp: got %v", external.UTCTimestamp)
+	}
+	// External-API `timestamp` is RFC3339.
+	if external.Timestamp == nil || !external.Timestamp.Equal(time.Date(2023, 11, 14, 22, 13, 20, 0, time.UTC)) {
+		t.Errorf("external.Timestamp: got %v", external.Timestamp)
 	}
 	if external.Aip != nil {
 		t.Errorf("external.Aip: external-API events do not carry aip; got %q", *external.Aip)
@@ -88,15 +96,9 @@ func TestExtract_HandlesSensorAndExternalApiEvents(t *testing.T) {
 func TestEnrichRow_PopulatesTpFieldsForBothFlavours(t *testing.T) {
 	t.Parallel()
 
-	raw, _ := os.ReadFile("testdata/sample.jsonl")
-	rows, err := (FdrEventExtractor{}).Extract(context.Background(), raw)
-	if err != nil {
-		t.Fatalf("extract: %v", err)
-	}
-
+	rows := loadFixture(t)
 	tbl := FdrEventTable{}
-	for i, r := range rows {
-		row := r.(*FdrEvent)
+	for i, row := range rows {
 		out, err := tbl.EnrichRow(row, schema.SourceEnrichment{})
 		if err != nil {
 			t.Fatalf("row %d enrich: %v", i, err)
@@ -104,11 +106,8 @@ func TestEnrichRow_PopulatesTpFieldsForBothFlavours(t *testing.T) {
 		if out.TpID == "" {
 			t.Errorf("row %d: TpID empty", i)
 		}
-		if out.TpTimestamp.IsZero() {
-			t.Errorf("row %d: TpTimestamp zero", i)
-		}
-		if out.TpDate.IsZero() {
-			t.Errorf("row %d: TpDate zero", i)
+		if !out.TpTimestamp.Equal(time.Unix(1700000000, 0)) {
+			t.Errorf("row %d: TpTimestamp got %v", i, out.TpTimestamp)
 		}
 		if h, m, s := out.TpDate.Clock(); h != 0 || m != 0 || s != 0 {
 			t.Errorf("row %d: TpDate not midnight UTC: %v", i, out.TpDate)
@@ -122,64 +121,39 @@ func TestEnrichRow_PopulatesTpFieldsForBothFlavours(t *testing.T) {
 	}
 
 	// Row 0: sensor → tp_source_ip should be cross-filled from aip.
-	sensor := rows[0].(*FdrEvent)
-	if sensor.TpSourceIP == nil || sensor.Aip == nil || *sensor.TpSourceIP != *sensor.Aip {
-		t.Errorf("sensor: TpSourceIP=%v should equal Aip=%v", sensor.TpSourceIP, sensor.Aip)
+	if s := rows[0]; s.TpSourceIP == nil || s.Aip == nil || *s.TpSourceIP != *s.Aip {
+		t.Errorf("sensor: TpSourceIP=%v should equal Aip=%v", s.TpSourceIP, s.Aip)
 	}
-
 	// Row 1: external-API → no aip, so TpSourceIP must be nil.
-	external := rows[1].(*FdrEvent)
-	if external.TpSourceIP != nil {
-		t.Errorf("external: TpSourceIP got %q, want nil", *external.TpSourceIP)
+	if e := rows[1]; e.TpSourceIP != nil {
+		t.Errorf("external: TpSourceIP got %q, want nil", *e.TpSourceIP)
 	}
 }
 
-func TestResolveTimestamp_PreferenceOrder(t *testing.T) {
+func TestEnrichRow_TimestampPreferenceAndMissing(t *testing.T) {
 	t.Parallel()
 
+	ctx, utc, ts := time.UnixMilli(1), time.UnixMilli(2), time.UnixMilli(3)
 	cases := []struct {
 		name string
 		row  *FdrEvent
 		want time.Time
 	}{
-		{
-			name: "context_time_stamp wins (sensor epoch seconds with millis)",
-			row: &FdrEvent{
-				ContextTimeStamp: ptr("1778159119.283"),
-				UTCTimestamp:     ptr("9999999999999"),
-				Timestamp:        ptr("9999999999999"),
-			},
-			want: time.UnixMilli(1778159119283),
-		},
-		{
-			name: "utc_timestamp wins when context_time_stamp absent (epoch ms)",
-			row:  &FdrEvent{UTCTimestamp: ptr("1778158758261")},
-			want: time.UnixMilli(1778158758261),
-		},
-		{
-			name: "rfc3339 timestamp parsed when only timestamp present",
-			row:  &FdrEvent{Timestamp: ptr("2026-05-07T12:59:18Z")},
-			want: time.Date(2026, 5, 7, 12, 59, 18, 0, time.UTC),
-		},
-		{
-			name: "epoch ms timestamp parsed when only timestamp present and not RFC3339",
-			row:  &FdrEvent{Timestamp: ptr("1778159121826")},
-			want: time.UnixMilli(1778159121826),
-		},
+		{"context_time_stamp wins", &FdrEvent{ContextTimeStamp: &ctx, UTCTimestamp: &utc, Timestamp: &ts}, ctx},
+		{"utc_timestamp next", &FdrEvent{UTCTimestamp: &utc, Timestamp: &ts}, utc},
+		{"timestamp last", &FdrEvent{Timestamp: &ts}, ts},
+	}
+	for _, tc := range cases {
+		out, err := (FdrEventTable{}).EnrichRow(tc.row, schema.SourceEnrichment{})
+		if err != nil || !out.TpTimestamp.Equal(tc.want) {
+			t.Errorf("%s: got %v, %v", tc.name, out, err)
+		}
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			got := resolveTimestamp(tc.row)
-			if !got.Equal(tc.want) {
-				t.Errorf("got %v, want %v", got, tc.want)
-			}
-		})
+	if _, err := (FdrEventTable{}).EnrichRow(&FdrEvent{}, schema.SourceEnrichment{}); !errors.Is(err, common.ErrNoTimestamp) {
+		t.Errorf("no timestamp: got %v, want ErrNoTimestamp", err)
 	}
 }
-
-func ptr(s string) *string { return &s }
 
 func strDeref(p *string) string {
 	if p == nil {

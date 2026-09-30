@@ -5,14 +5,9 @@ import (
 
 	"github.com/rs/xid"
 
-	"github.com/turbot/tailpipe-plugin-sdk/artifact_source"
-	"github.com/turbot/tailpipe-plugin-sdk/artifact_source_config"
-	"github.com/turbot/tailpipe-plugin-sdk/constants"
-	"github.com/turbot/tailpipe-plugin-sdk/row_source"
 	"github.com/turbot/tailpipe-plugin-sdk/schema"
 	"github.com/turbot/tailpipe-plugin-sdk/table"
 
-	"github.com/l-teles/tailpipe-plugin-crowdstrike/sources/s3_bucket"
 	"github.com/l-teles/tailpipe-plugin-crowdstrike/tables/common"
 )
 
@@ -27,32 +22,21 @@ func (AidMasterTable) GetDescription() string {
 }
 
 func (AidMasterTable) GetSourceMetadata() ([]*table.SourceMetadata[*AidMaster], error) {
-	return []*table.SourceMetadata[*AidMaster]{
-		{
-			SourceName: s3_bucket.CrowdstrikeS3BucketSourceIdentifier,
-			Options: []row_source.RowSourceOption{
-				artifact_source.WithDefaultArtifactSourceConfig(&artifact_source_config.ArtifactSourceConfigImpl{
-					FileLayout: common.DefaultBatchLayout,
-				}),
-				artifact_source.WithArtifactExtractor(NewAidMasterExtractor()),
-			},
-		},
-		{
-			SourceName: constants.ArtifactSourceIdentifier,
-			Options: []row_source.RowSourceOption{
-				artifact_source.WithArtifactExtractor(NewAidMasterExtractor()),
-			},
-		},
-	}, nil
+	return common.SourceMetadata(common.NewJSONLinesMapper("aid_master_mapper", mapAidMaster)), nil
 }
 
 func (AidMasterTable) EnrichRow(row *AidMaster, sourceEnrichmentFields schema.SourceEnrichment) (*AidMaster, error) {
+	ts, err := common.FirstTime(row.Time, row.FirstSeen)
+	if err != nil {
+		return nil, err
+	}
+
 	row.CommonFields = sourceEnrichmentFields.CommonFields
 
 	row.TpID = xid.New().String()
 	row.TpIngestTimestamp = time.Now().UTC()
-	row.TpTimestamp = common.PickEpochSeconds(row.Time, row.FirstSeen)
-	row.TpDate = row.TpTimestamp.Truncate(24 * time.Hour)
+	row.TpTimestamp = ts
+	row.TpDate = ts.Truncate(24 * time.Hour)
 
 	if row.Aip != nil {
 		row.TpSourceIP = row.Aip

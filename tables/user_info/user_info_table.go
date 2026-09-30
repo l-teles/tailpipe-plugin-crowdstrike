@@ -5,14 +5,9 @@ import (
 
 	"github.com/rs/xid"
 
-	"github.com/turbot/tailpipe-plugin-sdk/artifact_source"
-	"github.com/turbot/tailpipe-plugin-sdk/artifact_source_config"
-	"github.com/turbot/tailpipe-plugin-sdk/constants"
-	"github.com/turbot/tailpipe-plugin-sdk/row_source"
 	"github.com/turbot/tailpipe-plugin-sdk/schema"
 	"github.com/turbot/tailpipe-plugin-sdk/table"
 
-	"github.com/l-teles/tailpipe-plugin-crowdstrike/sources/s3_bucket"
 	"github.com/l-teles/tailpipe-plugin-crowdstrike/tables/common"
 )
 
@@ -27,32 +22,21 @@ func (UserInfoTable) GetDescription() string {
 }
 
 func (UserInfoTable) GetSourceMetadata() ([]*table.SourceMetadata[*UserInfo], error) {
-	return []*table.SourceMetadata[*UserInfo]{
-		{
-			SourceName: s3_bucket.CrowdstrikeS3BucketSourceIdentifier,
-			Options: []row_source.RowSourceOption{
-				artifact_source.WithDefaultArtifactSourceConfig(&artifact_source_config.ArtifactSourceConfigImpl{
-					FileLayout: common.DefaultBatchLayout,
-				}),
-				artifact_source.WithArtifactExtractor(NewUserInfoExtractor()),
-			},
-		},
-		{
-			SourceName: constants.ArtifactSourceIdentifier,
-			Options: []row_source.RowSourceOption{
-				artifact_source.WithArtifactExtractor(NewUserInfoExtractor()),
-			},
-		},
-	}, nil
+	return common.SourceMetadata(common.NewJSONLinesMapper("user_info_mapper", mapUserInfo)), nil
 }
 
 func (UserInfoTable) EnrichRow(row *UserInfo, sourceEnrichmentFields schema.SourceEnrichment) (*UserInfo, error) {
+	ts, err := common.FirstTime(row.Time, row.LogonTime)
+	if err != nil {
+		return nil, err
+	}
+
 	row.CommonFields = sourceEnrichmentFields.CommonFields
 
 	row.TpID = xid.New().String()
 	row.TpIngestTimestamp = time.Now().UTC()
-	row.TpTimestamp = common.PickEpochSeconds(row.Time, row.LogonTime)
-	row.TpDate = row.TpTimestamp.Truncate(24 * time.Hour)
+	row.TpTimestamp = ts
+	row.TpDate = ts.Truncate(24 * time.Hour)
 
 	if row.UserName != nil {
 		row.TpUsernames = append(row.TpUsernames, *row.UserName)
