@@ -17,6 +17,11 @@ jobs:
   goreleaser:
     name: build & publish GitHub Release
     runs-on: ubuntu-latest
+    # go-duckdb (via tailpipe-plugin-sdk) needs CGO; this image ships the C
+    # cross compilers .goreleaser.yml references. Keep its Go version in step
+    # with the go.mod toolchain directive.
+    container:
+      image: goreleaser/goreleaser-cross:v1.27.1-2-v2.18.2@sha256:8def7638d4f31ce8b22034694875c41c0cccb8392c9d06258c7dca9383bf1948
     permissions:
       contents: write # create GitHub Release + upload archives
     steps:
@@ -33,19 +38,10 @@ jobs:
           profile-region: us-east-1
           async: true
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          # cache disabled on the release path — zizmor HIGH (cache-poisoning):
-          # a poisoned module cache could be baked into the released binary.
-          cache: false
-
+      # Go and goreleaser both come from the container image.
       - name: Run goreleaser
-        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
-        with:
-          distribution: goreleaser
-          version: "~> v2"
-          args: release --clean
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          goreleaser release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

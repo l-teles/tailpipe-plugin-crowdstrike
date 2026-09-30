@@ -89,5 +89,5 @@ Create an Environment (e.g. `e2e-prod`) with:
    git tag -s vX.Y.Z -m "vX.Y.Z"
    git push origin vX.Y.Z
    ```
-3. The `release.yml` workflow builds binaries via goreleaser and attaches them to a **draft** GitHub release.
+3. The `release.yml` workflow builds binaries via goreleaser inside the `goreleaser-cross` image (CGO cross compilers for go-duckdb) and attaches them to a **draft** GitHub release. The Tailpipe Hub builds its own binaries from the tag with the same `.goreleaser.yml`. When the `toolchain` directive in `go.mod` moves, bump the image in `release.yml` to the matching Go version.
 4. Review the draft and publish it manually.
