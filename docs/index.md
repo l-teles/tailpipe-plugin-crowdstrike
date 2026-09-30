@@ -91,6 +91,23 @@ order by
 limit 10;
 ```
 
+```sh
++-------------------------+-------------+
+| event_simple_name       | event_count |
++-------------------------+-------------+
+| EndOfProcess            | 4381902     |
+| ProcessRollup2          | 4012577     |
+| NetworkConnectIP4       | 596214      |
+| DnsRequest              | 441830      |
+| ProcessRollup2Stats     | 188407      |
+| DirectoryCreate         | 161293      |
+| TlsClientHello          | 117046      |
+| SyntheticProcessRollup2 | 109875      |
+| AppProtocolDetected     | 98312       |
+| CriticalFileAccessed    | 80764       |
++-------------------------+-------------+
+```
+
 ## Tables
 
 | Table | Contents |
