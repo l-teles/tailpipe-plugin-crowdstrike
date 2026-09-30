@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 - Initial plugin scaffold.
-- Tables: `crowdstrike_fdr_event` (primary FDR events — sensor telemetry + external-API), `crowdstrike_aid_master`, `crowdstrike_app_info`, `crowdstrike_managed_assets`, `crowdstrike_user_info`.
+- Tables: `crowdstrike_fdr_event` (primary FDR events — sensor telemetry + external-API), `crowdstrike_aid_master`, `crowdstrike_app_info`, `crowdstrike_managed_asset`, `crowdstrike_user_info`.
 - Sources: `crowdstrike_s3_bucket` (S3 bucket / access-point alias) and the SDK's built-in `file` source.
 - Default grok layout covers both FDR variants: classic Hive-style (`batch=<uuid>/year=…/platform=…/part-*.txt.gz`) and the newer flat layout (`<uuid>/part-*.gz`).
 - Unit tests across extractors, `EnrichRow`, and the grok layout expansion.

@@ -160,7 +160,7 @@ partition "crowdstrike_user_info" "local_users" {
 ## Notes
 
 - `time` (wire field `_time`), `logon_time` and `password_last_set` are parsed into `TIMESTAMP` columns; `"0"` means unknown and becomes null. `user_is_admin` is a `BOOLEAN`, and `months_since_reset` a `BIGINT` that is null when FDR sends `"N/A"`.
-- This table has **no `aid` column**, because the wire format does not consistently include one. Use `last_logged_on_host` plus `cid` to associate rows with an agent, or join `crowdstrike_aid_master` on `computer_name`.
+- This table has **no `aid` column**, because the wire format does not consistently include one. Use `last_logged_on_host` plus `cid` to associate rows with an agent, or join `crowdstrike_aid_master` on `cid` and `last_logged_on_host = computer_name`.
 
 ## Source Defaults
 
