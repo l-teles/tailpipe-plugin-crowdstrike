@@ -1,51 +1,173 @@
-# crowdstrike_user_info
+---
+title: "Tailpipe Table: crowdstrike_user_info - Query CrowdStrike FDR UserInfo"
+description: "CrowdStrike FDR UserInfo snapshots: the accounts Falcon observes signing in on each host."
+---
 
-Local-account inventory observed on each Falcon-managed host — one row per (host, account) tuple from the FDR UserInfo lookup.
+# Table: crowdstrike_user_info - Query CrowdStrike FDR UserInfo
 
-> **PII** — `user`, `user_name`, and `user_sid_readable` are personally-identifying. Treat collected data accordingly.
+The `crowdstrike_user_info` table allows you to query UserInfo snapshots from CrowdStrike Falcon Data Replicator (FDR). Each row is one account observed on one host, with its type, last logon and password age.
 
-## Quick examples
+> **PII**: `user`, `user_name` and `user_sid_readable` identify people. Restrict access to your Tailpipe data accordingly.
+
+## Configure
+
+Create a [partition](https://tailpipe.io/docs/manage/partition) for `crowdstrike_user_info` ([examples](https://hub.tailpipe.io/plugins/l-teles/crowdstrike/tables/crowdstrike_user_info#example-configurations)):
+
+```sh
+vi ~/.tailpipe/config/crowdstrike.tpc
+```
+
+```hcl
+connection "crowdstrike" "fdr" {
+  profile = "crowdstrike-fdr"
+  region  = "eu-central-1"
+}
+
+partition "crowdstrike_user_info" "my_users" {
+  source "crowdstrike_s3_bucket" {
+    connection = connection.crowdstrike.fdr
+    bucket     = "cs-lion-cannon-XXXXXX-s3alias"
+    prefix     = "<tenant-id>/fdrv2/userinfo/"
+  }
+  tp_index = "cid"
+}
+```
+
+## Collect
+
+[Collect](https://tailpipe.io/docs/manage/collection) snapshots for all `crowdstrike_user_info` partitions:
+
+```sh
+tailpipe collect crowdstrike_user_info
+```
+
+Or for a single partition:
+
+```sh
+tailpipe collect crowdstrike_user_info.my_users
+```
+
+## Query
+
+**[Explore example queries for this table →](https://hub.tailpipe.io/plugins/l-teles/crowdstrike/queries/crowdstrike_user_info)**
 
 ### Local administrators
 
+List accounts that are local administrators on a host.
+
 ```sql
-select user, last_logged_on_host, account_type
-from crowdstrike_user_info
-where user_is_admin = '1';
+select distinct
+  user,
+  last_logged_on_host,
+  account_type
+from
+  crowdstrike_user_info
+where
+  user_is_admin;
 ```
 
-### Domain account login activity
+### Logon activity by account
+
+Summarise how each account signs in.
 
 ```sql
-select user_name, account_type, logon_type, count(*) as c
-from crowdstrike_user_info
-group by 1, 2, 3
-order by 4 desc
+select
+  user_name,
+  account_type,
+  logon_type,
+  count(*) as record_count
+from
+  crowdstrike_user_info
+group by
+  user_name,
+  account_type,
+  logon_type
+order by
+  record_count desc
 limit 25;
 ```
 
-### Stale passwords (>180 days, where known)
+### Stale passwords
+
+Find accounts whose password was last changed more than 180 days ago.
 
 ```sql
-select user, last_logged_on_host, password_last_set
-from crowdstrike_user_info
-where cast(password_last_set as bigint) > 0
-  and to_timestamp(cast(password_last_set as bigint)) < (current_timestamp - interval '180 days');
+select distinct
+  user,
+  last_logged_on_host,
+  password_last_set
+from
+  crowdstrike_user_info
+where
+  password_last_set < current_timestamp - interval '180 days'
+order by
+  password_last_set;
+```
+
+## Example Configurations
+
+### Collect UserInfo snapshots from an S3 bucket
+
+Collect UserInfo snapshots for a tenant, indexed by customer ID.
+
+```hcl
+connection "crowdstrike" "fdr" {
+  profile = "crowdstrike-fdr"
+  region  = "eu-central-1"
+}
+
+partition "crowdstrike_user_info" "my_users" {
+  source "crowdstrike_s3_bucket" {
+    connection = connection.crowdstrike.fdr
+    bucket     = "cs-lion-cannon-XXXXXX-s3alias"
+    prefix     = "<tenant-id>/fdrv2/userinfo/"
+  }
+  tp_index = "cid"
+}
+```
+
+### Collect administrator accounts only
+
+Use the partition `filter` to keep only local administrators.
+
+```hcl
+partition "crowdstrike_user_info" "my_admins" {
+  filter = "user_is_admin"
+
+  source "crowdstrike_s3_bucket" {
+    connection = connection.crowdstrike.fdr
+    bucket     = "cs-lion-cannon-XXXXXX-s3alias"
+    prefix     = "<tenant-id>/fdrv2/userinfo/"
+  }
+  tp_index = "cid"
+}
+```
+
+### Collect UserInfo snapshots from local files
+
+Replay UserInfo files downloaded outside Tailpipe.
+
+```hcl
+partition "crowdstrike_user_info" "local_users" {
+  source "file" {
+    paths       = ["/Users/myuser/fdr/userinfo"]
+    file_layout = `%{DATA}.gz`
+  }
+  tp_index = "cid"
+}
 ```
 
 ## Notes
 
-- `time` is delivered as `_time` on the wire; `logon_time` and `password_last_set` are also epoch-seconds strings (`"0"` means unknown).
-- This table has **no `aid` column** — the wire format does not consistently include one. Use `last_logged_on_host` plus `cid` to associate rows with an agent (or join through `crowdstrike_aid_master` on `computer_name`).
+- `time` (wire field `_time`), `logon_time` and `password_last_set` are parsed into `TIMESTAMP` columns; `"0"` means unknown and becomes null. `user_is_admin` is a `BOOLEAN`, and `months_since_reset` a `BIGINT` that is null when FDR sends `"N/A"`.
+- This table has **no `aid` column**, because the wire format does not consistently include one. Use `last_logged_on_host` plus `cid` to associate rows with an agent, or join `crowdstrike_aid_master` on `computer_name`.
 
-## Configuration
+## Source Defaults
 
-```hcl
-partition "crowdstrike_user_info" "prod" {
-  source "crowdstrike_s3_bucket" {
-    connection = connection.crowdstrike.default
-    bucket     = "cs-lion-cannon-XXXXXX-s3alias"
-    prefix     = "<tenant-id>/fdrv2/userinfo/"
-  }
-}
-```
+### crowdstrike_s3_bucket
+
+This table sets the following defaults for the [crowdstrike_s3_bucket source](https://hub.tailpipe.io/plugins/l-teles/crowdstrike/sources/crowdstrike_s3_bucket#arguments):
+
+| Argument    | Default |
+|-------------|---------|
+| file_layout | `(batch=)?%{DATA:batch}/(year=%{YEAR:year}/month=%{MONTHNUM:month}/day=%{MONTHDAY:day}/hour=%{HOUR:hour}/)?(platform=%{DATA:platform}/)?%{DATA}.gz` |

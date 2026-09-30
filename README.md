@@ -16,7 +16,7 @@
 | `crowdstrike_fdr_event` | Primary FDR events. Sensor telemetry (`ProcessRollup2`, `EndOfProcess`, `DnsRequest`, …) and external-API events (`Event_ModuleSummaryInfoEvent`, `Event_AuthActivityAuditEvent`, …) share this table. Hot identifiers are typed columns; the full event JSON is preserved in a `payload` column. |
 | `crowdstrike_aid_master` | AIDMaster — one row per agent (host) with sensor / OS / hardware metadata. |
 | `crowdstrike_app_info` | AppInfo — installed-application inventory. |
-| `crowdstrike_managed_assets` | ManagedAssets — network interface / gateway info per managed agent. |
+| `crowdstrike_managed_asset` | ManagedAssets — network interface / gateway info per managed agent. |
 | `crowdstrike_user_info` | UserInfo — local-account inventory per host. |
 
 `NotManaged` is intentionally absent in v1 (no reference data to validate the schema against).
@@ -28,18 +28,18 @@
 | `crowdstrike_s3_bucket` | Reads `.txt.gz` / `.gz` files from the FDR bucket (or its `*-s3alias` access-point alias). Authenticates via the standard AWS credential chain. Default grok layout matches both the classic Hive-style (`batch=<uuid>/year=…/platform=…/`) and the newer flat (`<uuid>/`) FDR layouts. |
 | `file` | SDK-provided local-file source. Use it to replay FDR files downloaded out-of-band, for testing or air-gapped review. |
 
+The tables also accept any other artifact source, such as the AWS plugin's `aws_s3_bucket`; see the [source docs](docs/sources/crowdstrike_s3_bucket.md#notes).
+
 ## Requirements
 
 - [Tailpipe](https://tailpipe.io/downloads) v0.7+
-- Go 1.25+ (only if building from source; `toolchain` directive in `go.mod` auto-fetches a patched version)
+- Go 1.26+ (only if building from source; `toolchain` directive in `go.mod` auto-fetches a patched version)
 - Read access to a CrowdStrike FDR S3 bucket — recommended: an IAM principal scoped to `s3:GetObject` + `s3:ListBucket` on the tenant prefix only
 
 ## Quick start
 
 ```bash
-git clone https://github.com/l-teles/tailpipe-plugin-crowdstrike
-cd tailpipe-plugin-crowdstrike
-make install      # drops the plugin under ~/.tailpipe/plugins/hub.tailpipe.io/plugins/l-teles/crowdstrike@latest
+tailpipe plugin install l-teles/crowdstrike
 ```
 
 Configure credentials any way the AWS SDK can find them — named profile, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, SSO, IRSA, instance role. Then drop a `crowdstrike.tpc` into `~/.tailpipe/config/`:
@@ -56,12 +56,13 @@ partition "crowdstrike_fdr_event" "prod" {
     bucket     = "cs-lion-cannon-XXXXXX-s3alias"
     prefix     = "<tenant-id>/data/"
   }
+  tp_index = "cid"  # index rows by CrowdStrike customer ID; defaults to "default"
 }
 
-partition "crowdstrike_aid_master"     "prod" { source "crowdstrike_s3_bucket" { connection = connection.crowdstrike.default  bucket = "cs-lion-cannon-XXXXXX-s3alias"  prefix = "<tenant-id>/fdrv2/aidmaster/" } }
-partition "crowdstrike_app_info"       "prod" { source "crowdstrike_s3_bucket" { connection = connection.crowdstrike.default  bucket = "cs-lion-cannon-XXXXXX-s3alias"  prefix = "<tenant-id>/fdrv2/appinfo/" } }
-partition "crowdstrike_managed_assets" "prod" { source "crowdstrike_s3_bucket" { connection = connection.crowdstrike.default  bucket = "cs-lion-cannon-XXXXXX-s3alias"  prefix = "<tenant-id>/fdrv2/managedassets/" } }
-partition "crowdstrike_user_info"      "prod" { source "crowdstrike_s3_bucket" { connection = connection.crowdstrike.default  bucket = "cs-lion-cannon-XXXXXX-s3alias"  prefix = "<tenant-id>/fdrv2/userinfo/" } }
+partition "crowdstrike_aid_master"    "prod" { source "crowdstrike_s3_bucket" { connection = connection.crowdstrike.default  bucket = "cs-lion-cannon-XXXXXX-s3alias"  prefix = "<tenant-id>/fdrv2/aidmaster/" }      tp_index = "cid" }
+partition "crowdstrike_app_info"      "prod" { source "crowdstrike_s3_bucket" { connection = connection.crowdstrike.default  bucket = "cs-lion-cannon-XXXXXX-s3alias"  prefix = "<tenant-id>/fdrv2/appinfo/" }        tp_index = "cid" }
+partition "crowdstrike_managed_asset" "prod" { source "crowdstrike_s3_bucket" { connection = connection.crowdstrike.default  bucket = "cs-lion-cannon-XXXXXX-s3alias"  prefix = "<tenant-id>/fdrv2/managedassets/" }  tp_index = "cid" }
+partition "crowdstrike_user_info"     "prod" { source "crowdstrike_s3_bucket" { connection = connection.crowdstrike.default  bucket = "cs-lion-cannon-XXXXXX-s3alias"  prefix = "<tenant-id>/fdrv2/userinfo/" }       tp_index = "cid" }
 ```
 
 Replay a local dump instead:
@@ -70,8 +71,9 @@ Replay a local dump instead:
 partition "crowdstrike_fdr_event" "local" {
   source "file" {
     paths       = ["/path/to/fdr-samples"]
-    file_layout = "%{DATA}.gz"
+    file_layout = `%{DATA}.gz`
   }
+  tp_index = "cid"
 }
 ```
 
@@ -86,12 +88,25 @@ Per-table docs and example queries live under [`docs/tables/`](docs/tables/).
 
 ## Notes
 
-- **Wire format** — every value in FDR JSON is delivered as a string (timestamps, integers, floats included). All row columns are `*string`; cast at query time, e.g. `cast(payload->>'$.RawProcessId' as bigint)` or `to_timestamp(cast(time as bigint))`.
-- **Timestamps** — sensor `ContextTimeStamp` is epoch-seconds with optional fractional ms (`"1778159119.283"`); sensor `timestamp` and external-API `UTCTimestamp` are epoch-milliseconds; external-API `timestamp` is RFC3339. `tp_timestamp` resolves the best available.
+- **Wire format** — every value in FDR JSON is delivered as a string. Timestamps, counts and flags are parsed into `TIMESTAMP`, `BIGINT` and `BOOLEAN` columns (placeholders like `"0"` or `"N/A"` become null); everything else stays text, so cast at query time when needed, e.g. `cast(payload->>'$.RawProcessId' as bigint)`.
+- **Timestamps** — sensor `ContextTimeStamp` is epoch-seconds with optional fractional ms (`"1778159119.283"`); sensor `timestamp` and external-API `UTCTimestamp` are epoch-milliseconds; external-API `timestamp` is RFC3339. `tp_timestamp` uses the first one present; a record with none is reported as a row error in the collect summary rather than collected.
+- **Bad lines** — lines up to 16 MiB are streamed; longer or malformed lines are reported as row errors in the collect summary.
 - **`payload` JSON column** — every table carries one. Anything not promoted to a typed column stays queryable via `payload->>'$.Field'`.
 - **PII** — `aip`, `LocalAddressIP4`, `UserName`, `User`, `MAC`, `ExternalIP`, `UserSid_readable`, and others are personally identifying. They are ingested as-is. Restrict access to the local DuckLake store and downstream queries; see [SECURITY.md](SECURITY.md).
 - **Operator hardening** — use an IAM principal scoped to the tenant prefix only, not the whole bucket. Prefer profile / SSO / IRSA over static keys in HCL.
-- **Collection performance** — the plugin prunes S3 prefixes by the `--from`/`--to` window, but only on the date partitions your `file_layout` declares. For ideal performance organise the bucket **date-first** (`year=YYYY/month=MM/day=DD/hour=HH/platform=<plat>/…`) so a narrow window lists only the matching days. CrowdStrike's default nests dates under `batch=<uuid>/`, forcing the walk to enumerate every batch prefix before it can prune — noticeably slower on large buckets. Details and a ready-to-use `file_layout` in the [source docs](docs/sources/crowdstrike_s3_bucket/index.md#performance-prefer-a-date-first-layout).
+- **Collection performance** — the plugin prunes S3 prefixes by the `--from`/`--to` window, but only on the date partitions your `file_layout` declares. For ideal performance organise the bucket **date-first** (`year=YYYY/month=MM/day=DD/hour=HH/platform=<plat>/…`) so a narrow window lists only the matching days. CrowdStrike's default nests dates under `batch=<uuid>/`, forcing the walk to enumerate every batch prefix before it can prune — noticeably slower on large buckets. Details and a ready-to-use `file_layout` in the [source docs](docs/sources/crowdstrike_s3_bucket.md#performance-prefer-a-date-first-layout).
+
+## Developing
+
+Build and install from source (requires Go 1.26+):
+
+```bash
+git clone https://github.com/l-teles/tailpipe-plugin-crowdstrike
+cd tailpipe-plugin-crowdstrike
+make install      # drops the plugin under ~/.tailpipe/plugins/hub.tailpipe.io/plugins/l-teles/crowdstrike@latest
+```
+
+Run the tests with `make test`.
 
 ## Contributing & security
 
@@ -101,4 +116,4 @@ Per-table docs and example queries live under [`docs/tables/`](docs/tables/).
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+Code: Apache-2.0, see [LICENSE](LICENSE). Documentation under [`docs/`](docs/): CC BY-NC-ND 4.0, see [docs/LICENSE](docs/LICENSE).

@@ -4,7 +4,7 @@ Thanks for considering a contribution. This plugin is small and the bar is strai
 
 ## Development environment
 
-- Go 1.25+ (`toolchain` directive in `go.mod` auto-fetches a patched version)
+- Go 1.26+ (`toolchain` directive in `go.mod` auto-fetches a patched version)
 - [Tailpipe](https://tailpipe.io/downloads) CLI (for end-to-end testing)
 - Access to a CrowdStrike FDR S3 bucket (or local FDR-format sample files) if you want to run the remote-source path
 
@@ -25,7 +25,7 @@ go test ./... -race    # with race detector
 
 Each new table or source must come with:
 - A `testdata/sample.jsonl` fixture (sanitised — no real cids, aids, IPs, MACs, hostnames, usernames, or emails — see the `stable_hex` pattern used in existing fixtures).
-- A `_test.go` that exercises the extractor and `EnrichRow` end-to-end against the fixture.
+- A `_test.go` that exercises the mapper and `EnrichRow` end-to-end against the fixture.
 
 ## Code style
 
@@ -56,10 +56,10 @@ Conventional Commits:
 ## Adding a new table
 
 1. New package under `tables/<table_name>/`.
-2. Four files: `<table>.go` (row struct), `<table>_table.go` (Identifier + GetSourceMetadata + EnrichRow), `<table>_extractor.go` (uses `common.ExtractJSONLines`), `<table>_test.go`.
+2. Three files: `<table>.go` (row struct, `map<Row>` function and column descriptions), `<table>_table.go` (Identifier + `common.SourceMetadata` + EnrichRow), `<table>_test.go`. Every column needs a description.
 3. Sanitised `testdata/sample.jsonl`.
 4. Register it in `crowdstrike/plugin.go`.
-5. Add `docs/tables/<table_name>/index.md` with HCL examples (both `crowdstrike_s3_bucket` and `file` sources) plus a couple of useful SQL queries.
+5. Add `docs/tables/<table_name>/index.md` (front matter; Configure, Collect, Query, Example Configurations and Source Defaults sections) and `docs/tables/<table_name>/queries.md`, following the existing tables. Use backticks for `file_layout` values and include `tp_index = "cid"` in partition examples.
 
 ## Security-impacting changes
 
