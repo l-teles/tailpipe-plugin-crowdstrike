@@ -21,7 +21,7 @@ jobs:
     # cross compilers .goreleaser.yml references. Keep its Go version in step
     # with the go.mod toolchain directive.
     container:
-      image: goreleaser/goreleaser-cross:v1.27.1-2-v2.18.2@sha256:8def7638d4f31ce8b22034694875c41c0cccb8392c9d06258c7dca9383bf1948
+      image: goreleaser/goreleaser-cross:v1.27.3-v2.18.3@sha256:1820cee53c4c06cfb43c2203caca73f9497042f5b6061c8916a251228a321975
     permissions:
       contents: write # create GitHub Release + upload archives
     steps:
