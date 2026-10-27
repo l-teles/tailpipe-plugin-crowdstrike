@@ -7,7 +7,7 @@ repo's actual state.
 ## 1. Repo metadata
 
 - **Description**: `Tailpipe plugin that ingests CrowdStrike Falcon Data Replicator (FDR) data from S3 and exposes it as SQL.`
-- **Homepage**: (leave empty for now; point to docs site once one exists)
+- **Homepage**: `https://hub.tailpipe.io/plugins/l-teles/crowdstrike`
 - **Topics** (Repository settings → About → Topics):
   - `tailpipe`
   - `tailpipe-plugin`
