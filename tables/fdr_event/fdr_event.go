@@ -1,7 +1,11 @@
 package fdr_event
 
 import (
+	"time"
+
 	"github.com/turbot/tailpipe-plugin-sdk/schema"
+
+	"github.com/l-teles/tailpipe-plugin-crowdstrike/tables/common"
 )
 
 // FdrEvent represents a single record from a Falcon Data Replicator (FDR)
@@ -17,8 +21,7 @@ import (
 //
 // Hot identifiers common to investigations are typed columns. The full record
 // is preserved in `payload` (JSON) so any uncommon field remains queryable via
-// `payload->>'$.SomeField'`. Every value in FDR JSON is delivered as a string
-// (timestamps included), so all string fields here are `*string`.
+// `payload->>'$.SomeField'`.
 type FdrEvent struct {
 	schema.CommonFields
 
@@ -38,13 +41,43 @@ type FdrEvent struct {
 	AgentIdString    *string `parquet:"name=agent_id_string"`
 	CustomerIdString *string `parquet:"name=customer_id_string"`
 
-	// Raw timestamp strings (units vary by event family — see EnrichRow).
-	ContextTimeStamp *string `parquet:"name=context_time_stamp"`
-	Timestamp        *string `parquet:"name=timestamp_raw"`
-	UTCTimestamp     *string `parquet:"name=utc_timestamp_raw"`
+	// Timestamps; the wire units differ by event family (see mapFdrEvent).
+	ContextTimeStamp *time.Time `parquet:"name=context_time_stamp"`
+	Timestamp        *time.Time `parquet:"name=timestamp"`
+	UTCTimestamp     *time.Time `parquet:"name=utc_timestamp"`
 
 	// Whole record (including the keys promoted above) for ad-hoc queries.
 	Payload map[string]any `parquet:"name=payload, type=JSON"`
+}
+
+func mapFdrEvent(doc map[string]any) *FdrEvent {
+	evt := &FdrEvent{Payload: doc}
+
+	evt.Aid = common.StringFromMap(doc, "aid")
+	evt.Aip = common.StringFromMap(doc, "aip")
+	evt.Cid = common.StringFromMap(doc, "cid")
+	evt.EventPlatform = common.StringFromMap(doc, "event_platform")
+	evt.EventSimpleName = common.StringFromMap(doc, "event_simpleName")
+	evt.Name = common.StringFromMap(doc, "name")
+	evt.ComputerName = common.StringFromMap(doc, "ComputerName")
+	evt.EventOrigin = common.StringFromMap(doc, "EventOrigin")
+
+	evt.EventType = common.StringFromMap(doc, "EventType")
+	evt.ExternalApiType = common.StringFromMap(doc, "ExternalApiType")
+	evt.AgentIdString = common.StringFromMap(doc, "AgentIdString")
+	evt.CustomerIdString = common.StringFromMap(doc, "CustomerIdString")
+
+	// ContextTimeStamp: epoch seconds (sensor). UTCTimestamp: epoch ms
+	// (external-API). timestamp: epoch ms (sensor) or RFC3339 (external-API).
+	evt.ContextTimeStamp = common.EpochSecondsFromMap(doc, "ContextTimeStamp")
+	evt.UTCTimestamp = common.EpochMillisFromMap(doc, "UTCTimestamp")
+	evt.Timestamp = common.RFC3339OrEpochMillisFromMap(doc, "timestamp")
+
+	// Cross-fill cid from CustomerIdString so it's always populated.
+	if evt.Cid == nil && evt.CustomerIdString != nil {
+		evt.Cid = evt.CustomerIdString
+	}
+	return evt
 }
 
 func (FdrEvent) GetColumnDescriptions() map[string]string {
@@ -61,12 +94,11 @@ func (FdrEvent) GetColumnDescriptions() map[string]string {
 		"external_api_type":  "External-API event subtype (e.g. Event_ModuleSummaryInfoEvent).",
 		"agent_id_string":    "Agent identifier — external-API events.",
 		"customer_id_string": "Customer identifier — external-API events.",
-		"context_time_stamp": "Sensor-event timestamp (epoch seconds, may include fractional milliseconds).",
-		"timestamp_raw":      "Raw `timestamp` field as delivered (epoch ms or RFC3339, depending on event family).",
-		"utc_timestamp_raw":  "Raw `UTCTimestamp` field as delivered — external-API events (epoch ms).",
+		"context_time_stamp": "Sensor event time (`ContextTimeStamp`, delivered as epoch seconds).",
+		"timestamp":          "Record `timestamp` (delivered as epoch ms for sensor events, RFC3339 for external-API events).",
+		"utc_timestamp":      "External-API event time (`UTCTimestamp`, delivered as epoch ms).",
 		"payload":            "Full event JSON, including any field not promoted to a typed column.",
-		"tp_timestamp":       "Best-effort event time, parsed from the most-specific timestamp present on the record.",
-		"tp_index":           "Customer (tenant) ID.",
+		"tp_timestamp":       "Event time: the first of context_time_stamp, utc_timestamp and timestamp that is present.",
 		"tp_source_ip":       "Agent IP (`aip`) where present.",
 	}
 }

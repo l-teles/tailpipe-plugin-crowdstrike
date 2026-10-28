@@ -5,14 +5,9 @@ import (
 
 	"github.com/rs/xid"
 
-	"github.com/turbot/tailpipe-plugin-sdk/artifact_source"
-	"github.com/turbot/tailpipe-plugin-sdk/artifact_source_config"
-	"github.com/turbot/tailpipe-plugin-sdk/constants"
-	"github.com/turbot/tailpipe-plugin-sdk/row_source"
 	"github.com/turbot/tailpipe-plugin-sdk/schema"
 	"github.com/turbot/tailpipe-plugin-sdk/table"
 
-	"github.com/l-teles/tailpipe-plugin-crowdstrike/sources/s3_bucket"
 	"github.com/l-teles/tailpipe-plugin-crowdstrike/tables/common"
 )
 
@@ -27,32 +22,21 @@ func (AppInfoTable) GetDescription() string {
 }
 
 func (AppInfoTable) GetSourceMetadata() ([]*table.SourceMetadata[*AppInfo], error) {
-	return []*table.SourceMetadata[*AppInfo]{
-		{
-			SourceName: s3_bucket.CrowdstrikeS3BucketSourceIdentifier,
-			Options: []row_source.RowSourceOption{
-				artifact_source.WithDefaultArtifactSourceConfig(&artifact_source_config.ArtifactSourceConfigImpl{
-					FileLayout: common.DefaultBatchLayout,
-				}),
-				artifact_source.WithArtifactExtractor(NewAppInfoExtractor()),
-			},
-		},
-		{
-			SourceName: constants.ArtifactSourceIdentifier,
-			Options: []row_source.RowSourceOption{
-				artifact_source.WithArtifactExtractor(NewAppInfoExtractor()),
-			},
-		},
-	}, nil
+	return common.SourceMetadata(common.NewJSONLinesMapper("app_info_mapper", mapAppInfo)), nil
 }
 
 func (AppInfoTable) EnrichRow(row *AppInfo, sourceEnrichmentFields schema.SourceEnrichment) (*AppInfo, error) {
+	ts, err := common.FirstTime(row.Time)
+	if err != nil {
+		return nil, err
+	}
+
 	row.CommonFields = sourceEnrichmentFields.CommonFields
 
 	row.TpID = xid.New().String()
 	row.TpIngestTimestamp = time.Now().UTC()
-	row.TpTimestamp = common.PickEpochSeconds(row.Time)
-	row.TpDate = row.TpTimestamp.Truncate(24 * time.Hour)
+	row.TpTimestamp = ts
+	row.TpDate = ts.Truncate(24 * time.Hour)
 
 	if row.ExternalIP != nil {
 		row.TpIps = append(row.TpIps, *row.ExternalIP)

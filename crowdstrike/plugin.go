@@ -11,7 +11,7 @@ import (
 	"github.com/l-teles/tailpipe-plugin-crowdstrike/tables/aid_master"
 	"github.com/l-teles/tailpipe-plugin-crowdstrike/tables/app_info"
 	"github.com/l-teles/tailpipe-plugin-crowdstrike/tables/fdr_event"
-	"github.com/l-teles/tailpipe-plugin-crowdstrike/tables/managed_assets"
+	"github.com/l-teles/tailpipe-plugin-crowdstrike/tables/managed_asset"
 	"github.com/l-teles/tailpipe-plugin-crowdstrike/tables/user_info"
 )
 
@@ -24,7 +24,7 @@ func init() {
 	table.RegisterTable[*fdr_event.FdrEvent, *fdr_event.FdrEventTable]()
 	table.RegisterTable[*aid_master.AidMaster, *aid_master.AidMasterTable]()
 	table.RegisterTable[*app_info.AppInfo, *app_info.AppInfoTable]()
-	table.RegisterTable[*managed_assets.ManagedAsset, *managed_assets.ManagedAssetsTable]()
+	table.RegisterTable[*managed_asset.ManagedAsset, *managed_asset.ManagedAssetTable]()
 	table.RegisterTable[*user_info.UserInfo, *user_info.UserInfoTable]()
 
 	// The remote S3 source is plugin-specific. The SDK ships the local-file

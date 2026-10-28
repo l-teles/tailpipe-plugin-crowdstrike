@@ -1,10 +1,10 @@
 # Goreleaser configuration for tailpipe-plugin-crowdstrike.
 #
 # Shape mirrors turbot/tailpipe-plugin-aws (gz archives, one binary per target,
-# binary name ends in `.plugin`). The Turbot-internal OCI publish step is
-# intentionally omitted; releases attach binaries to the GitHub Release and
-# users install via `make install` from source or by manually downloading and
-# extracting the .gz under ~/.tailpipe/plugins/hub.tailpipe.io/plugins/l-teles/crowdstrike@latest/.
+# binary name ends in `.plugin`). tailpipe-plugin-sdk links go-duckdb, which
+# needs CGO, so each target enables it and sets a C cross compiler. Those
+# compilers only exist in the goreleaser-cross image, where release.yml (and
+# the Tailpipe Hub) run this.
 version: 2
 
 before:
@@ -12,25 +12,73 @@ before:
     - go mod tidy
 
 builds:
-  - id: tailpipe-plugin-crowdstrike
+  - id: tailpipe-darwin-amd64
     binary: "{{ .ProjectName }}.plugin"
-    main: ./
-    flags:
-      - -tags=netgo  # pure-Go DNS resolver; lets us skip CGO + cross-compilers entirely
-      - -trimpath    # strip absolute paths from the binary for reproducibility
-    ldflags:
-      - -s -w
-      - -X main.version={{ .Version }}
-      - -X main.commit={{ .Commit }}
-    mod_timestamp: "{{ .CommitTimestamp }}"
-    env:
-      - CGO_ENABLED=0
     goos:
       - darwin
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=1
+      - CC=o64-clang
+      - CXX=o64-clang++
+    flags:
+      - -tags=netgo
+      - -trimpath # strip absolute paths from the binary for reproducibility
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: tailpipe-darwin-arm64
+    binary: "{{ .ProjectName }}.plugin"
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    env:
+      - CGO_ENABLED=1
+      - CC=oa64-clang
+      - CXX=oa64-clang++
+    flags:
+      - -tags=netgo
+      - -trimpath
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: tailpipe-linux-arm64
+    binary: "{{ .ProjectName }}.plugin"
+    goos:
+      - linux
+    goarch:
+      - arm64
+    env:
+      - CGO_ENABLED=1
+      - CC=aarch64-linux-gnu-gcc
+      - CXX=aarch64-linux-gnu-g++
+    flags:
+      - -tags=netgo
+      - -trimpath
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: tailpipe-linux-amd64
+    binary: "{{ .ProjectName }}.plugin"
+    goos:
       - linux
     goarch:
       - amd64
-      - arm64
+    env:
+      - CGO_ENABLED=1
+      - CC=x86_64-linux-gnu-gcc
+      - CXX=x86_64-linux-gnu-g++
+    flags:
+      - -tags=netgo
+      - -trimpath
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:
   - id: default
