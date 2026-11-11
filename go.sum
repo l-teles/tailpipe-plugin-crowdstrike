@@ -381,6 +381,8 @@ github.com/turbot/pipe-fittings/v2 v2.9.3 h1:baiqDfW40ibsSFgNiLsdamyMWisK+7mToHu
 github.com/turbot/pipe-fittings/v2 v2.9.3/go.mod h1:kqRlXCgosJOpEwodMwZwi1qvXf7UE6QS50ZzndEhoaU=
 github.com/turbot/pipe-fittings/v2 v2.9.4 h1:pXvaqNh1r5CTHJ2juqzy35eiL9N5bKM9EBeBrSom4Yk=
 github.com/turbot/pipe-fittings/v2 v2.9.4/go.mod h1:kqRlXCgosJOpEwodMwZwi1qvXf7UE6QS50ZzndEhoaU=
+github.com/turbot/pipe-fittings/v2 v2.9.5 h1:NMMYL3zH15XsRQQia9RkAYyzZK7+HkYPdIyfUpExAYM=
+github.com/turbot/pipe-fittings/v2 v2.9.5/go.mod h1:kqRlXCgosJOpEwodMwZwi1qvXf7UE6QS50ZzndEhoaU=
 github.com/turbot/pipes-sdk-go v0.16.1 h1:FaFVlyANGWCK1oekFq/oN4h4MKMWcc2DjlSt9VTj/jg=
 github.com/turbot/pipes-sdk-go v0.16.1/go.mod h1:z/VTxsl5X1IAsnmjTf60mrBgOALzdw/vjKwgSvqpxls=
 github.com/turbot/tailpipe-plugin-sdk v0.9.5 h1:q+TbVENBIf7JZxzsNzqGae+KvyJiDnxJ2koGLmw0TOM=
